@@ -1,5 +1,4 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useToast } from "./ui/use-toast";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -23,31 +22,26 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Check, Image, Plus, Save } from "lucide-react";
 import { Badge } from "./ui/badge";
+import { useParams } from "react-router-dom";
 
-// Placeholder data - will be fetched from backend in real implementation
-const CATEGORIES = [
-  { id: "1", name: "Handcrafts" },
-  { id: "2", name: "Food & Drinks" },
-  { id: "3", name: "Clothing & Fashion" },
-  { id: "4", name: "Home & Decor" },
-  { id: "5", name: "Art & Collectibles" },
-  { id: "6", name: "Agriculture" },
-];
+interface Category {
+  id: string;
+  name: string;
+}
 
-const TAGS = [
-  { id: "1", name: "Handmade" },
-  { id: "2", name: "Organic" },
-  { id: "3", name: "Fair Trade" },
-  { id: "4", name: "Traditional" },
-  { id: "5", name: "Sustainable" },
-  { id: "6", name: "Eco-friendly" },
-  { id: "7", name: "Vegan" },
-  { id: "8", name: "Natural" },
-];
+interface Tag {
+  id: string;
+  name: string;
+}
 
 const ProductForm: React.FC = () => {
+  const { productId } = useParams();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<string>("details");
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isProductLoading, setIsProductLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -67,6 +61,78 @@ const ProductForm: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [categoriesResponse, tagsResponse] = await Promise.all([
+          fetch('http://localhost:8080/api/categories'),
+          fetch('http://localhost:8080/api/tags')
+        ]);
+
+        if (!categoriesResponse.ok || !tagsResponse.ok) {
+          throw new Error('Failed to fetch data');
+        }
+
+        const categoriesData = await categoriesResponse.json();
+        const tagsData = await tagsResponse.json();
+
+        setCategories(categoriesData);
+        setTags(tagsData);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast({
+          title: "Error loading data",
+          description: "Failed to load categories and tags. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [toast]);
+
+  // Fetch product for editing
+  useEffect(() => {
+    if (!productId) return;
+    setIsProductLoading(true);
+    fetch(`http://localhost:8080/api/products`)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch product');
+        return res.json();
+      })
+      .then(products => {
+        const product = products.find((p: { id: string }) => p.id === productId);
+        if (product) {
+          setFormData(prev => ({
+            ...prev,
+            name: product.name || "",
+            description: product.description || "",
+            price: product.price ? String(product.price) : "",
+            stockQuantity: product.stockQuantity ? String(product.stockQuantity) : "",
+            category: product.category_id || product.category || "",
+            selectedTags: product.tags ? product.tags.map((t: { id: string }) => t.id) : [],
+            images: [],
+            imagePreviewUrls: product.image_url ? [product.image_url.startsWith('http') ? product.image_url : `http://localhost:8080${product.image_url}`] : [],
+            shippingInfo: product.shippingInfo || "",
+            dimensions: product.dimensions || "",
+            weight: product.weight ? String(product.weight) : "",
+            materials: product.materials || "",
+            returnPolicy: product.returnPolicy || "",
+          }));
+        }
+      })
+      .catch(error => {
+        toast({
+          title: "Error loading product",
+          description: "Failed to load product for editing.",
+          variant: "destructive",
+        });
+      })
+      .finally(() => setIsProductLoading(false));
+  }, [productId, toast]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -88,23 +154,37 @@ const ProductForm: React.FC = () => {
     });
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
+    const file = files[0];
 
-    const newFiles = Array.from(files);
-    const newPreviewUrls = newFiles.map((file) => URL.createObjectURL(file));
-
-    setFormData((prev) => ({
-      ...prev,
-      images: [...prev.images, ...newFiles],
-      imagePreviewUrls: [...prev.imagePreviewUrls, ...newPreviewUrls],
-    }));
-
-    toast({
-      title: "Images uploaded",
-      description: `${newFiles.length} image(s) have been added to your product.`,
-    });
+    // Upload to backend
+    const formDataUpload = new FormData();
+    formDataUpload.append('file', file);
+    try {
+      const uploadRes = await fetch('http://localhost:8080/api/upload', {
+        method: 'POST',
+        body: formDataUpload,
+      });
+      if (!uploadRes.ok) throw new Error('Failed to upload image');
+      const uploadData = await uploadRes.json();
+      setFormData((prev) => ({
+        ...prev,
+        images: [file],
+        imagePreviewUrls: [`http://localhost:8080${uploadData.image_url}`], // Use the correct property and absolute URL
+      }));
+      toast({
+        title: 'Image uploaded',
+        description: 'Your image has been uploaded successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error uploading image',
+        description: 'There was an error uploading your image. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const removeImage = (index: number) => {
@@ -157,8 +237,32 @@ const ProductForm: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-      // Simulate API call to backend
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Prepare the product data
+      const productData = {
+        vendor_id: "00000000-0000-0000-0000-000000000000", // This should be the actual vendor ID from your auth system
+        name: formData.name,
+        description: formData.description,
+        price: parseFloat(formData.price),
+        image_url: formData.imagePreviewUrls[0] || "", // Using the first image as the main image
+        is_draft: false,
+        category_id: formData.category || null,
+        tag_ids: formData.selectedTags.length > 0 ? formData.selectedTags : null
+      };
+
+      // Make the API call to create the product
+      const response = await fetch('http://localhost:8080/api/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(productData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit product');
+      }
+
+      const result = await response.json();
       
       toast({
         title: "Product submitted",
@@ -184,6 +288,7 @@ const ProductForm: React.FC = () => {
       
       setActiveTab("details");
     } catch (error) {
+      console.error('Error submitting product:', error);
       toast({
         title: "Error submitting product",
         description: "There was an error submitting your product. Please try again.",
@@ -204,6 +309,15 @@ const ProductForm: React.FC = () => {
       formData.images.length > 0
     );
   };
+
+  if (isProductLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-cm-green"></div>
+        <span className="ml-4">Loading product...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto px-4 py-6 max-w-4xl">
@@ -286,7 +400,7 @@ const ProductForm: React.FC = () => {
                     <SelectValue placeholder="Select a category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {CATEGORIES.map((category) => (
+                    {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id}>
                         {category.name}
                       </SelectItem>
@@ -325,7 +439,7 @@ const ProductForm: React.FC = () => {
               <div className="space-y-2">
                 <Label>Product Tags</Label>
                 <div className="flex flex-wrap gap-2">
-                  {TAGS.map((tag) => (
+                  {tags.map((tag) => (
                     <Badge
                       key={tag.id}
                       variant={formData.selectedTags.includes(tag.id) ? "default" : "outline"}
@@ -522,7 +636,7 @@ const ProductForm: React.FC = () => {
                   {formData.category && (
                     <div className="mb-2">
                       <Badge variant="outline" className="bg-cm-sand bg-opacity-30">
-                        {CATEGORIES.find(c => c.id === formData.category)?.name}
+                        {categories.find(c => c.id === formData.category)?.name}
                       </Badge>
                     </div>
                   )}
@@ -531,7 +645,7 @@ const ProductForm: React.FC = () => {
                     <div className="flex flex-wrap gap-1 mb-4">
                       {formData.selectedTags.map((tagId) => (
                         <Badge key={tagId} variant="secondary" className="bg-muted">
-                          {TAGS.find(t => t.id === tagId)?.name}
+                          {tags.find(t => t.id === tagId)?.name}
                         </Badge>
                       ))}
                     </div>

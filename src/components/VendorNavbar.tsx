@@ -1,4 +1,3 @@
-
 import React from "react";
 import { Link } from "react-router-dom";
 import { User } from "lucide-react";
@@ -28,6 +27,11 @@ const VendorNavbar: React.FC = () => {
           <Button variant="ghost" className="text-white hover:text-cm-yellow">
             Orders
           </Button>
+          <Link to="/notifications">
+            <Button variant="ghost" className="text-white hover:text-cm-yellow">
+              Notifications
+            </Button>
+          </Link>
           <Button className="bg-white text-cm-green hover:bg-cm-sand">
             <User size={18} className="mr-2" />
             Account

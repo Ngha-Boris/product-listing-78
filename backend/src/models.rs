@@ -25,6 +25,8 @@ pub struct NewProduct {
     pub price: f64,
     pub image_url: String,
     pub is_draft: bool,
+    pub category_id: Option<Uuid>,
+    pub tag_ids: Option<Vec<Uuid>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -69,4 +71,4 @@ pub struct Notification {
     pub message: String,
     pub is_read: bool,
     pub created_at: DateTime<Utc>,
-} 
+}

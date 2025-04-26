@@ -1,4 +1,3 @@
-
 import React from "react";
 import VendorNavbar from "@/components/VendorNavbar";
 import ProductForm from "@/components/ProductForm";
@@ -6,6 +5,7 @@ import ProductStatus from "@/components/ProductStatus";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
+import { Link } from "react-router-dom";
 
 const Index: React.FC = () => {
   return (
@@ -24,9 +24,11 @@ const Index: React.FC = () => {
             <Button variant="outline" className="mr-2">
               Cancel
             </Button>
-            <Button className="bg-cm-green hover:bg-cm-forest">
-              View My Products
-            </Button>
+            <Link to="/products">
+              <Button className="bg-cm-green hover:bg-cm-forest">
+                View My Products
+              </Button>
+            </Link>
           </div>
         </div>
         
